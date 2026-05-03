@@ -200,6 +200,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   restoreImage: async (id) => {
     await api.restoreImage(id);
+    if (get().selectedImageId === id) set({ selectedImageId: null });
     await get().refreshAll();
   },
 
