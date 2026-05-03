@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ZoomIn, ZoomOut } from 'lucide-react';
 import { useAppStore, type ImageRecord } from '../../stores/app-store';
 import { api } from '../../lib/ipc';
 
@@ -11,6 +11,14 @@ export function ImageFocus() {
   const [phase, setPhase] = useState<Phase>('measure');
   const containerRef = useRef<HTMLDivElement>(null);
   const [targetRect, setTargetRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const [toast, setToast] = useState(false);
+
+  const isZoomed = zoom > 1;
 
   useEffect(() => {
     if (selectedImageId) {
@@ -55,7 +63,6 @@ export function ImageFocus() {
     }
   }, [phase]);
 
-  // Exit animation trigger
   useLayoutEffect(() => {
     if (phase !== 'exit-start') return;
     requestAnimationFrame(() => {
@@ -71,6 +78,8 @@ export function ImageFocus() {
   }, [phase, setSelectedImage]);
 
   const handleClose = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
     if (phase === 'done' && focusOriginRect) {
       setClosingFocus(true);
       setPhase('exit-start');
@@ -80,12 +89,57 @@ export function ImageFocus() {
   }, [phase, focusOriginRect, setSelectedImage, setClosingFocus]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.key === 'Escape') handleClose();
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && image) {
+        e.preventDefault();
+        const success = await window.electronAPI.copyImageToClipboard(image.original_path);
+        if (success) {
+          setToast(true);
+          setTimeout(() => setToast(false), 2000);
+        }
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [handleClose]);
+  }, [handleClose, image]);
+
+  const handleZoomChange = (newZoom: number) => {
+    const clamped = Math.max(1, Math.min(5, newZoom));
+    if (clamped === 1) setPan({ x: 0, y: 0 });
+    setZoom(clamped);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isZoomed) return;
+    e.preventDefault();
+    setIsPanning(true);
+    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy });
+  };
+
+  const handleMouseUp = () => {
+    setIsPanning(false);
+  };
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const handleUp = () => setIsPanning(false);
+    document.addEventListener('mouseup', handleUp);
+    return () => document.removeEventListener('mouseup', handleUp);
+  }, [isPanning]);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.005;
+    handleZoomChange(zoom + delta);
+  };
 
   if (!image) return null;
 
@@ -161,14 +215,43 @@ export function ImageFocus() {
             Back
           </button>
           <span className="text-sm text-gray-300 truncate">{image.title || image.filename}</span>
+
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-2">
+            <ZoomOut size={14} className="text-gray-500" />
+            <input
+              type="range"
+              min="1"
+              max="5"
+              step="0.1"
+              value={zoom}
+              onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+              className="w-24 h-1 accent-blue-500 cursor-pointer"
+            />
+            <ZoomIn size={14} className="text-gray-500" />
+            <span className="text-xs text-gray-500 w-10 text-right">{Math.round(zoom * 100)}%</span>
+          </div>
         </header>
       )}
-      <div ref={containerRef} className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+      <div
+        ref={containerRef}
+        className={`flex-1 flex items-center justify-center p-4 overflow-hidden ${isZoomed ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
+      >
         {phase === 'done' && (
           <img
             src={src}
             alt={image.title || image.filename}
-            className="max-w-full max-h-full object-contain rounded-lg"
+            className="max-w-full max-h-full object-contain rounded-lg select-none"
+            draggable={false}
+            style={{
+              transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+              transition: isPanning ? 'none' : 'transform 150ms ease-out',
+            }}
           />
         )}
       </div>
@@ -178,6 +261,11 @@ export function ImageFocus() {
           alt={image.title || image.filename}
           style={getImgStyle()}
         />
+      )}
+      {toast && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl text-sm text-gray-200 animate-fade-in">
+          Copied to clipboard
+        </div>
       )}
     </main>
   );

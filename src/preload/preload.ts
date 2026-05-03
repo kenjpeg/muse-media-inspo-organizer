@@ -58,6 +58,9 @@ const api = {
     return () => ipcRenderer.removeListener('files-imported', callback);
   },
 
+  // Clipboard
+  copyImageToClipboard: (filePath: string) => ipcRenderer.invoke('clipboard:copyImage', filePath),
+
   // Current folder for drop imports
   setCurrentFolder: (folderId: string | null) => { currentFolderId = folderId; },
 

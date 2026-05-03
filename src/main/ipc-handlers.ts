@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { IpcMain } from 'electron';
+import { nativeImage, clipboard } from 'electron';
 import { createFolderRepo } from './database/repositories/folders';
 import { createImageRepo, type ImageFilter } from './database/repositories/images';
 import { createTagRepo } from './database/repositories/tags';
@@ -99,5 +100,13 @@ export function registerIpcHandlers(db: Database.Database, ipcMain: IpcMain): vo
 
   ipcMain.handle('ai:findSimilar', async (_, imageId: string) => {
     return findSimilarImages(db, imageId);
+  });
+
+  // Clipboard
+  ipcMain.handle('clipboard:copyImage', (_, filePath: string) => {
+    const img = nativeImage.createFromPath(filePath);
+    if (img.isEmpty()) return false;
+    clipboard.writeImage(img);
+    return true;
   });
 }
