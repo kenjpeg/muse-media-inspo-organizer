@@ -92,7 +92,7 @@ export function DetailPanel() {
 
   return (
     <aside
-      className={`shrink-0 w-72 bg-gray-900 border-l border-gray-800 flex flex-col h-full overflow-hidden transition-transform ${visible ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`shrink-0 w-72 bg-gray-900 border-l border-gray-800 flex flex-col h-full overflow-hidden transition-all ${visible ? 'translate-x-0' : 'translate-x-full -mr-72'}`}
       style={{ transitionTimingFunction: 'cubic-bezier(0.2, 0.9, 0.3, 1)', transitionDuration: '350ms' }}
       onTransitionEnd={handleTransitionEnd}
     >

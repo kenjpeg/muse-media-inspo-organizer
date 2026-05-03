@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function ImageCard({ image }: Props) {
-  const { selectedImageId, setSelectedImage, setDraggingImage, folders, tags, trashImage, refreshAll, loadTags } = useAppStore();
+  const { selectedImageId, setSelectedImage, setDraggingImage, folders, tags, trashImage, deleteImage, refreshAll, loadTags } = useAppStore();
   const cardRef = useRef<HTMLDivElement>(null);
   const isSelected = selectedImageId === image.id;
 
@@ -77,21 +77,17 @@ export function ImageCard({ image }: Props) {
     setSubMenu(null);
   };
 
-  const handleTrash = async () => {
-    setContextMenu(null);
-    setSubMenu(null);
-    trashImage(image.id);
-  };
 
   return (
     <>
       <div
         ref={cardRef}
+        data-image-id={image.id}
         draggable
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onContextMenu={handleContextMenu}
-        className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all h-48
+        className={`cursor-pointer rounded-lg overflow-hidden border-2 h-48
           ${isSelected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-transparent hover:border-gray-700'}`}
         onClick={() => {
           const rect = cardRef.current?.getBoundingClientRect();
@@ -189,10 +185,18 @@ export function ImageCard({ image }: Props) {
           <div className="border-t border-gray-700 mt-1 pt-1">
             <button
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-gray-700 transition-colors"
-              onClick={handleTrash}
+              onClick={() => {
+                setContextMenu(null);
+                setSubMenu(null);
+                if (image.is_trashed) {
+                  deleteImage(image.id);
+                } else {
+                  trashImage(image.id);
+                }
+              }}
             >
               <Trash2 size={12} />
-              Move to Trash
+              {image.is_trashed ? 'Delete permanently' : 'Move to Trash'}
             </button>
           </div>
         </div>
