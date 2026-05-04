@@ -1,19 +1,37 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { app } from 'electron';
 
 let sidecarProcess: ChildProcess | null = null;
-let responseResolvers: Map<string, (value: unknown) => void> = new Map();
+const responseResolvers: Map<string, (value: unknown) => void> = new Map();
 let requestId = 0;
 
+/** Directory that contains `package.json` (dev: repo root; packaged: app folder). */
+function getProjectRoot(): string {
+  try {
+    return app.getAppPath();
+  } catch {
+    return path.resolve(__dirname, '..', '..');
+  }
+}
+
 function getVenvPython(): string {
-  const projectRoot = path.resolve(__dirname, '../../..');
-  return path.join(projectRoot, 'python', '.venv', 'bin', 'python3');
+  return path.join(getProjectRoot(), 'python', '.venv', 'bin', 'python3');
 }
 
 function getScriptPath(): string {
-  const projectRoot = path.resolve(__dirname, '../../..');
-  return path.join(projectRoot, 'python', 'embed_server.py');
+  return path.join(getProjectRoot(), 'python', 'embed_server.py');
+}
+
+/** Venv interpreter and embed script exist on disk (Clip can be started). */
+export function clipArtifactsPresent(): boolean {
+  try {
+    return fs.existsSync(getVenvPython()) && fs.existsSync(getScriptPath());
+  } catch {
+    return false;
+  }
 }
 
 export function startSidecar(): boolean {
@@ -25,6 +43,12 @@ export function startSidecar(): boolean {
   try {
     sidecarProcess = spawn(pythonPath, [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    sidecarProcess.on('error', (err) => {
+      console.error('[python-sidecar] spawn failed:', err.message);
+      sidecarProcess = null;
+      responseResolvers.clear();
     });
 
     const rl = readline.createInterface({ input: sidecarProcess.stdout! });
